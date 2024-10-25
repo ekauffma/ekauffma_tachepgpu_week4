@@ -19,11 +19,11 @@ __global__ void stencil_2d(int *in, int *out) {
 
 	// Read input elements into shared memory
 	int size = N + 2 * RADIUS;
-	temp[lindex_x][lindex_y] = in[gindex_y + size * gindex_x]
+	temp[lindex_x][lindex_y] = in[gindex_y + size * gindex_x];
 
 	if (threadIdx.x < RADIUS) {
 		temp[lindex_x - RADIUS][lindex_y] = in[gindex_y + size * (gindex_x - RADIUS)];
-        temp[lindex_x + BLOCK_SIZE][lindex_y] = in[gindex_y + size * (g_index_x + BLOCK_SIZE)];
+        temp[lindex_x + BLOCK_SIZE][lindex_y] = in[gindex_y + size * (gindex_x + BLOCK_SIZE)];
 	}
 
 	if (threadIdx.y < RADIUS ) {
@@ -34,6 +34,7 @@ __global__ void stencil_2d(int *in, int *out) {
 	// Apply the stencil
 	int result = 0;
 	for (int offset = -RADIUS; offset <= RADIUS; offset++){
+        __syncthreads();
 		result += temp[lindex_x + offset][lindex_y];
         if (offset!=0) // avoid double-counting
             result += temp[lindex_x][lindex_y + offset];
@@ -63,11 +64,11 @@ int main(void) {
 
 	// Alloc space for device copies
 	cudaMalloc((void **)&d_in, size);
-	FIXME
+	cudaMalloc((void **)&d_out, size);
 
 	// Copy to device
 	cudaMemcpy(d_in, in, size, cudaMemcpyHostToDevice);
-	FIXME
+	cudaMemcpy(d_out, out, size, cudaMemcpyHostToDevice);
 
 	// Launch stencil_2d() kernel on GPU
 	int gridSize = (N + BLOCK_SIZE-1)/BLOCK_SIZE;
@@ -78,27 +79,28 @@ int main(void) {
 	stencil_2d<<<grid,block>>>(d_in + RADIUS*(N + 2*RADIUS) + RADIUS , d_out + RADIUS*(N + 2*RADIUS) + RADIUS);
 
 	// Copy result back to host
-	FIXME
+    cudaMemcpy(in, d_in, size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(out, d_out, size, cudaMemcpyDeviceToHost);
+
 
 	// Error Checking
 	for (int i = 0; i < N + 2 * RADIUS; ++i) {
 		for (int j = 0; j < N + 2 * RADIUS; ++j) {
-
 			if (i < RADIUS || i >= N + RADIUS) {
 				if (out[j+i*(N + 2 * RADIUS)] != 1) {
-					printf("Mismatch at index [%d,%d], was: %d, should be: %d\n", i,j, out[j+i*(N + 2 * RADIUS)], 1);
+					printf("    Mismatch at index [%d,%d], was: %d, should be: %d\n", i,j, out[j+i*(N + 2 * RADIUS)], 1);
 					return -1;
 				}
 			}
 			else if (j < RADIUS || j >= N + RADIUS) {
 				if (out[j+i*(N + 2 * RADIUS)] != 1) {
-					printf("Mismatch at index [%d,%d], was: %d, should be: %d\n", i,j, out[j+i*(N + 2 * RADIUS)], 1);
+					printf("    Mismatch at index [%d,%d], was: %d, should be: %d\n", i,j, out[j+i*(N + 2 * RADIUS)], 1);
 					return -1;
 				}
 			}		 
 			else {
 				if (out[j+i*(N + 2 * RADIUS)] != 1 + 4 * RADIUS) {
-					printf("Mismatch at index [%d,%d], was: %d, should be: %d\n", i,j, out[j+i*(N + 2 * RADIUS)], 1 + 4*RADIUS);
+					printf("    Mismatch at index [%d,%d], was: %d, should be: %d\n", i,j, out[j+i*(N + 2 * RADIUS)], 1 + 4*RADIUS);
 					return -1;
 				}
 			}
